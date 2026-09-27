@@ -1,0 +1,252 @@
+{
+	"name": "codedock",
+	"displayName": "CodeDock",
+	"description": "把当前打开的编辑器窗口变成一台 MCP 服务器，网页端 AI（ChatGPT / Claude / Grok / Devin）两种方式接入：连接器里配 MCP 地址，或复制一句话接入语句直接粘进对话。远程 AI 即可读写当前工作区（可撤销）、执行验证命令、用 LSP 和诊断自查。",
+	"version": "1.6.5",
+	"publisher": "local",
+	"license": "MIT",
+	"engines": {
+		"vscode": "^1.82.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"main": "./extension.js",
+	"activationEvents": [
+		"onStartupFinished"
+	],
+	"contributes": {
+		"commands": [
+			{
+				"command": "codedock.openPanel",
+				"title": "CodeDock: 打开控制面板",
+				"icon": "$(radio-tower)"
+			},
+			{
+				"command": "codedock.openPanelBeside",
+				"title": "CodeDock: 在右侧打开控制面板",
+				"icon": "$(split-horizontal)"
+			},
+			{
+				"command": "codedock.start",
+				"title": "CodeDock: 启动服务",
+				"icon": "$(play)"
+			},
+			{
+				"command": "codedock.stop",
+				"title": "CodeDock: 停止服务",
+				"icon": "$(debug-stop)"
+			},
+			{
+				"command": "codedock.copyUrl",
+				"title": "CodeDock: 复制连接地址",
+				"icon": "$(copy)"
+			},
+			{
+				"command": "codedock.openGuide",
+				"title": "CodeDock: 打开接入向导页",
+				"icon": "$(book)"
+			}
+		],
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "codedockContainer",
+					"title": "CodeDock",
+					"icon": "media/bridge.svg"
+				}
+			]
+		},
+		"views": {
+			"codedockContainer": [
+				{
+					"id": "codedock.panel",
+					"name": "控制面板",
+					"type": "webview"
+				}
+			]
+		},
+		"configuration": {
+			"title": "CodeDock",
+			"properties": {
+				"codedock.autoStart": {
+					"type": "boolean",
+					"default": false,
+					"description": "打开文件夹后自动启动 Bridge。默认关闭（开箱不暴露公网）；需要时用「CodeDock: 启动服务」或打开这个开关。没有打开任何文件夹时不会启动（没有范围就没有授权）。"
+				},
+				"codedock.permission.read": {
+					"type": "boolean",
+					"default": true,
+					"description": "允许远程 AI 读取和搜索工作区内容（read_files / search_files / lsp / get_diagnostics 等）。"
+				},
+				"codedock.permission.edit": {
+					"type": "boolean",
+					"default": true,
+					"description": "允许远程 AI 创建、修改、删除文件（apply_patch）。改动在编辑器里显示为 diff，可 Ctrl+Z 撤销。"
+				},
+				"codedock.permission.execute": {
+					"type": "boolean",
+					"default": false,
+					"description": "允许远程 AI 执行 shell 命令（run_command / send_command_input / dotnet_* / godot_* 等，以及工作区 .vscode/mcp.json 聚合的 MCP 工具）。默认关闭，需要时在控制面板里打开。"
+				},
+				"codedock.allowOutsideWorkspace": {
+					"type": "boolean",
+					"default": false,
+					"description": "允许远程工具访问本机所有路径(不限于工作区),开启后不再弹出越界授权窗。等于把整块磁盘交给远程会话,请谨慎开启。关闭时仍按目录弹窗授权(本次会话/永久)。"
+				},
+				"codedock.port": {
+					"type": "number",
+					"default": 8787,
+					"description": "本地 HTTP 监听端口（仅监听 127.0.0.1）。"
+				},
+				"codedock.tunnelProvider": {
+					"type": "string",
+					"enum": [
+						"cloudflare-named",
+						"cloudflared",
+						"ngrok",
+						"openai",
+						"none"
+					],
+					"default": "cloudflared",
+					"description": "公网隧道方式。cloudflared=快速隧道（免注册，域名随机）；cloudflare-named=具名隧道（固定域名、无流量限制，需 Cloudflare 账号 + 自己的域名）；ngrok=固定域名但有额度限制；openai=OpenAI 安全隧道客户端；none=仅本机。"
+				},
+				"codedock.openaiTunnelId": {
+					"type": "string",
+					"default": "",
+					"description": "OpenAI 隧道的 Tunnel ID（由 OpenAI / 企业后台分配）。"
+				},
+				"codedock.openaiApiKey": {
+					"type": "string",
+					"default": "",
+					"description": "OpenAI 隧道连接 API Key / 凭据。"
+				},
+				"codedock.openaiTunnelClientPath": {
+					"type": "string",
+					"default": "",
+					"description": "OpenAI 隧道客户端或 ngrok/cloudflared 兼容客户端的可执行文件路径。"
+				},
+				"codedock.externalProviders": {
+					"type": "array",
+					"default": [],
+					"description": "外部 MCP 进程提供者列表（聚合网关模式）。CodeDock 会启动这些进程，并将其工具以 '<provider>__<tool>' 前缀聚合暴露给远程 AI。",
+					"items": {
+						"type": "object",
+						"properties": {
+							"name": {
+								"type": "string",
+								"description": "Provider 唯一标识名称，如 'github' 或 'sqlite'"
+							},
+							"command": {
+								"type": "string",
+								"description": "启动进程的可执行文件命令，如 'npx' 或 'python'"
+							},
+							"args": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								},
+								"description": "传递给命令的参数列表"
+							},
+							"env": {
+								"type": "object",
+								"description": "附加环境变量"
+							},
+							"cwd": {
+								"type": "string",
+								"description": "工作目录路径（留空则默认工作区根目录）"
+							}
+						},
+						"required": [
+							"name",
+							"command"
+						]
+					}
+				},
+				"codedock.aggregateWorkspaceMcp": {
+					"type": "boolean",
+					"default": true,
+					"description": "自动发现并聚合工作区 .vscode/mcp.json 里声明的 stdio MCP 服务器（工具以 '<name>__<tool>' 暴露）。启动进程需要 Execute 权限开启；高危命令会先弹窗确认。"
+				},
+				"codedock.cloudflaredPath": {
+					"type": "string",
+					"default": "",
+					"description": "cloudflared.exe 路径。留空时会在桌面 devin-mcp-bridge 目录等处自动查找。"
+				},
+				"codedock.ngrokPath": {
+					"type": "string",
+					"default": "",
+					"description": "ngrok.exe 路径。留空时会在桌面 devin-mcp-bridge 目录等处自动查找。"
+				},
+				"codedock.ngrokConfigPath": {
+					"type": "string",
+					"default": "",
+					"description": "ngrok 配置文件（ngrok.yml）路径。留空时使用 ngrok 默认配置。"
+				},
+				"codedock.ngrokAuthtoken": {
+					"type": "string",
+					"default": "",
+					"description": "ngrok authtoken。填了就通过命令行传给 ngrok，不必再改 ngrok.yml。"
+				},
+				"codedock.ngrokDomain": {
+					"type": "string",
+					"default": "",
+					"description": "ngrok 固定域名（保留域名 / 自定义域名），例如 your-name.ngrok-free.app。留空则用随机域名。"
+				},
+				"codedock.cloudflareTunnelToken": {
+					"type": "string",
+					"default": "",
+					"description": "Cloudflare 具名隧道令牌（Zero Trust → Networks → Tunnels → 你的隧道 → 复制令牌）。"
+				},
+				"codedock.cloudflareHostname": {
+					"type": "string",
+					"default": "",
+					"description": "具名隧道的固定域名，即隧道里配置的 Public Hostname，例如 mcp.example.com。"
+				},
+				"codedock.dotnetPath": {
+					"type": "string",
+					"default": "",
+					"description": "dotnet 可执行文件的完整路径。留空时直接用 PATH 里的 dotnet。"
+				},
+				"codedock.gitPath": {
+					"type": "string",
+					"default": "",
+					"description": "git 可执行文件的完整路径。留空时直接用 PATH 里的 git。"
+				},
+				"codedock.extraRoots": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [],
+					"description": "工作区之外允许远程工具访问的目录白名单（绝对路径，手动维护）。日常越界建议直接用面板里的总开关或弹窗的「本次会话允许」。"
+				},
+				"codedock.godotPath": {
+					"type": "string",
+					"default": "",
+					"description": "Godot 可执行文件的完整路径，例如 C:\\Godot\\Godot_v4.3-stable_win64.exe。留空时依次查找 PATH 和工作区根目录。"
+				},
+				"codedock.sendImages": {
+					"type": "boolean",
+					"default": true,
+					"description": "read_image 是否把图片内容本身发给 AI（需要客户端支持 MCP image 内容块）。关闭后只返回图片元数据。"
+				},
+				"codedock.extraInstructions": {
+					"type": "string",
+					"default": "",
+					"description": "追加给 AI 的额外说明，会合并进 MCP initialize 的 instructions。"
+				},
+				"codedock.routeToken": {
+					"type": "string",
+					"default": "",
+					"description": "URL 中的访问令牌。留空则首次运行时自动生成并保存在密钥库；改掉它可以立刻作废旧地址。"
+				},
+				"codedock.licensePublicKey": {
+					"type": "string",
+					"default": "",
+					"description": "Ed25519 公钥（PEM 格式）。留空表示不启用授权（CDK）校验，所有功能开放；配置后启动服务需要有效的 licenseKey。"
+				}
+			}
+		}
+	}
+}

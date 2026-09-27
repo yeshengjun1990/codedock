@@ -1,0 +1,13 @@
+# 隧道二进制(84MB,发布时单独放 Release)
+bin/
+
+# 打包产物
+*.vsix
+
+# 依赖(保留测试用的 vscode stub)
+node_modules/*
+!node_modules/vscode
+
+# 系统文件
+Thumbs.db
+.DS_Store
