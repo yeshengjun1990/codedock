@@ -54,4 +54,3 @@ node test-extraroots.js  # 越界授权流程
 
 ## License
 
-私有项目,保留所有权利。
