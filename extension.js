@@ -332,6 +332,14 @@ class BridgeController {
   async ensureToken() {
     const configured = (this.config().get("routeToken") || "").trim();
     if (configured) {
+      // The URL is the credential: a short custom token is a toy lock. Warn,
+      // do not block - the user may be running a deliberately isolated setup.
+      if (configured.length < 16 && this.routeToken !== configured) {
+        this.log(`警告：codedock.routeToken 只有 ${configured.length} 个字符，容易被穷举（建议 ≥16 个随机字符）`);
+        vscode.window.showWarningMessage(
+          "codedock.routeToken 强度过低：连接地址本身就是钥匙，短令牌可被穷举。建议改用 ≥16 个随机字符，或清空该设置让 CodeDock 自动生成并存入密钥库。"
+        );
+      }
       if (this.routeToken !== configured) this.log("访问令牌：取自设置 codedock.routeToken");
       this.routeToken = configured;
       return this.routeToken;

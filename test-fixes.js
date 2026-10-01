@@ -203,7 +203,8 @@ function ok(name, fn) {
   console.log("[#2/#5/#8/#9/#10] source-level assertions");
   const fs2 = require("fs");
   await ok("scope: loop exhaustion now fails closed", () =>
-    assert(fs2.readFileSync("./lib/scope.js", "utf8").includes("return false;\n}")));
+    // Normalize line endings first: the checkout may be CRLF (core.autocrlf).
+    assert(fs2.readFileSync("./lib/scope.js", "utf8").replace(/\r\n/g, "\n").includes("return false;\n}")));
   await ok("server: guide page escapes interpolations", () => {
     const s = fs2.readFileSync("./lib/server.js", "utf8");
     assert(s.includes("function escapeHtml"), "helper");

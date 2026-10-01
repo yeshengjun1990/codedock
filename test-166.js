@@ -11,6 +11,7 @@ const vscode = require("vscode");
 
 const scope = require("./lib/scope");
 const tools = require("./lib/tools");
+const guard = require("./lib/guard");
 const { createDispatcher, recentClients, buildInstructions } = require("./lib/protocol");
 
 const WS = fs.mkdtempSync(path.join(os.tmpdir(), "codedock166-"));
@@ -145,6 +146,41 @@ ok("master switch disables the list", (() => {
     await dispatcher.handle({ method: "initialize", params: {} });
     ok("missing clientInfo ignored", recentClients().length === 2);
     ok("instructions mention credential guard", buildInstructions({ roots: [WS], extra: "" }).includes("Credential material"));
+  }
+
+  // ------------------------------------- 8. guard: paired samples (1.6.7)
+  // Every guard regression in the 1.6.7 audit is locked here as a pair:
+  // a dangerous form that MUST hit, and a lookalike that MUST pass.
+  console.log("8. guard paired samples");
+  {
+    const HIT_RM = "递归或强制删除（rm -rf）";
+    const HIT_PUSH = "强制推送（git push --force）";
+    const mustHit = [
+      ["rm -rf build", HIT_RM],
+      ["sudo rm --recursive --force x", HIT_RM],
+      ["rm build -rf", HIT_RM],
+      ['sh -c "rm -rf /"', HIT_RM],
+      ['rm "a (1).txt" -rf', HIT_RM],
+      ["git push --force", HIT_PUSH],
+      ["git push -f origin main", HIT_PUSH],
+      ["git push origin +main:main", HIT_PUSH],
+      ["git push origin +main", HIT_PUSH],
+      ["git push --force-with-lease origin main --force", HIT_PUSH],
+    ];
+    const mustPass = [
+      "rm note.txt",
+      "rm note.txt && ls -r src",
+      "rm tmp.txt; grep -r foo src",
+      "git push origin main",
+      "git push --force-with-lease origin main",
+      "git push origin feature+x",
+    ];
+    for (const [cmd, label] of mustHit) {
+      ok(`guard hits: ${cmd}`, guard.scan(cmd).includes(label), guard.scan(cmd).join(",") || "no hit");
+    }
+    for (const cmd of mustPass) {
+      ok(`guard passes: ${cmd}`, !guard.scan(cmd).length, guard.scan(cmd).join(","));
+    }
   }
 
   console.log(`\nAll ${passed} checks passed.`);
