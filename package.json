@@ -2,7 +2,7 @@
 	"name": "codedock",
 	"displayName": "CodeDock",
 	"description": "把当前打开的编辑器窗口变成一台 MCP 服务器，网页端 AI（ChatGPT / Claude / Grok / Devin）两种方式接入：连接器里配 MCP 地址，或复制一句话接入语句直接粘进对话。远程 AI 即可读写当前工作区（可撤销）、执行验证命令、用 LSP 和诊断自查。",
-	"version": "1.6.5",
+	"version": "1.6.6",
 	"publisher": "local",
 	"license": "MIT",
 	"engines": {
@@ -93,6 +93,11 @@
 					"type": "boolean",
 					"default": false,
 					"description": "允许远程工具访问本机所有路径(不限于工作区),开启后不再弹出越界授权窗。等于把整块磁盘交给远程会话,请谨慎开启。关闭时仍按目录弹窗授权(本次会话/永久)。"
+				},
+				"codedock.allowSecretFiles": {
+					"type": "boolean",
+					"default": false,
+					"description": "允许远程 AI 读取工作区内的凭据文件（.env、私钥、.npmrc、.aws/credentials 等）。默认拒绝并在读取时弹窗授权；搜索结果也默认排除这些文件。开启等于把工作区里的密钥都交给远程会话，请谨慎。"
 				},
 				"codedock.port": {
 					"type": "number",

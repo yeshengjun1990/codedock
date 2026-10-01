@@ -14,7 +14,7 @@ const crypto = require("crypto");
 
 const scope = require("./lib/scope");
 const { createHttpServer } = require("./lib/server");
-const { createDispatcher } = require("./lib/protocol");
+const { createDispatcher, recentClients } = require("./lib/protocol");
 const { TunnelManager } = require("./lib/tunnel");
 const { renderPanelHtml } = require("./lib/panel");
 const { buildConnectionPrompt } = require("./lib/prompt");
@@ -72,6 +72,8 @@ const TUNNEL_KEYS = [
  */
 function metaLabel(name, meta) {
   if (!meta) return "";
+  // A replayed call ran nothing - say that before any tool-specific badge.
+  if (meta.replayed) return "重放";
   if (name === "apply_patch") {
     if (meta.deleted) return "已删除";
     if (meta.renamed_from) return `重命名自 ${meta.renamed_from}`;
@@ -226,6 +228,7 @@ class BridgeController {
       permissions: policy.describe(),
       permissionCounts: policy.counts(),
       allowOutsideWorkspace: this.config().get("allowOutsideWorkspace", false) === true,
+      clients: recentClients(),
     };
   }
 
